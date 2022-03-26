@@ -28,9 +28,26 @@ Grid waar je cells neerzet en kabels naartoe aanlegt. Je mag cells abstracten.
 # TODO's
 
 [x] dt propageren
-[ ] svg renderen
-    [ ] LUT rendering
-    [ ] io switch drawing
-    [ ] routing switch drawing
+[x] svg renderen
+    [x] LUT rendering
+    [x] io switch drawing
+    [x] routing switch drawing
+[ ] toolie om nets en switches uit SVGs te extracten en daar nieuwe SVGs met actieve edges van te maken?
+[ ] configurations renderen
+    [x] LUT configuration
+    [ ] ioswitch configuration
+    [ ] router configuration
+    [ ] mux state
+    [ ] register state
+    [x] tile netstates
+    [ ] io switch netstate
+    [ ] router netstate
+    [x] input state
+    [x] input netstate
+    [ ] output state
+    [ ] output netstate
+[ ] simulatie
+    [ ] tile logic
+    [ ] netstate propagatie op basis van configuratie
 [ ] acties
 [ ] lopen wat natuurlijker met wat kleine velocities enzo
