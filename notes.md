@@ -12,8 +12,15 @@ Gamification: doe berekenjobs voor tokens, daarmee:
 - speel je meer tiles vrij
 - kan de arity van specifieke LUTs verhoogd worden
 - kan de clock gestart of versneld worden.
+- copy paste tool
+    - per LUT
+    - per tile
+    - per tile selectie
+- density van routing network
+- verschillende switch box topologies
 
 (Creative mode: gigantische FPGA alvast vrijgespeeld)
 
 ## Optie 2: ASIC-like.
 
+Grid waar je cells neerzet en kabels naartoe aanlegt. Je mag cells abstracten.

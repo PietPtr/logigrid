@@ -1,0 +1,5 @@
+{
+    "[purescript]": {
+        "editor.tabSize": 4
+    }
+}
