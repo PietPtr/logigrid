@@ -12,6 +12,11 @@ import Data.Boolean
 import Data.Generic.Rep
 import Data.Map as Map
 import Graphics.Canvas (CanvasImageSource)
+import Partial.Unsafe (unsafePartial)
+
+type Coord = {
+    x :: Int, y :: Int
+}
 
 type GameState = {
         tiles :: List Tile,
@@ -251,6 +256,18 @@ interActions = (
     , f: (\_ s -> s) } :
     Nil)
 
+
+-- TODO: doe dit nou maar met maps sukkol het is echt grondig stuk op deze manier
 switchPortA :: {x :: Int, y :: Int } -> GameState -> GameState
 -- switchPortA coords state = state { inputs { statea = not state.inputs.statea } }
-switchPortA coords state = state
+switchPortA coords state = state { inputs = inputs' }
+    where
+        inputs' = updated : (filter equal state.inputs)
+
+        toUpdate = unsafePartial $ case filter (\s -> not $ equal s) state.inputs of
+            (elem : _) -> elem
+
+        updated = toUpdate { statea = not toUpdate.statea }
+
+        equal :: forall r . {x :: Int, y :: Int | r} -> Boolean
+        equal inp = inp.x == coords.x && inp.y == coords.y

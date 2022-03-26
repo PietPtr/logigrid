@@ -352,7 +352,7 @@ applyInteractable stateRef = do
     pure unit
     where
         findAndApply :: GameState -> GameState
-        findAndApply state = stateFunc state
+        findAndApply state = spy (show coords) $ stateFunc state
             where
                 playerx' = state.player.x + state.dimensions.width / 2.0
                 playery' = state.player.y + state.dimensions.height / 2.0
