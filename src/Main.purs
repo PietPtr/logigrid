@@ -15,14 +15,21 @@ import Effect.Random
 import Data.Int
 import Data.List
 
+import Web.HTML (window)
 import Web.HTML.Window (Window, document, requestAnimationFrame,
     innerWidth, innerHeight)
-import Web.HTML (window)
-import Web.UIEvent.MouseEvent.EventTypes
+import Web.HTML.HTMLElement (toElement, HTMLElement)
+import Web.Event.Event
+import Web.Event.EventTarget
+import Web.HTML.Window (toEventTarget)
+import Web.DOM.Element
 import State
 import Data.Foldable
 import Effect.Ref as Ref
 import Effect.Ref (Ref)
+import Unsafe.Coerce
+import Web.UIEvent.KeyboardEvent
+import Signal.Time
 
 main :: Effect Unit
 main = void $ unsafePartial do
@@ -38,21 +45,22 @@ main = void $ unsafePartial do
     setFillStyle ctx "#abc9ee"
     setStrokeStyle ctx "#000000"
 
-    -- let target = elementToEventTarget canvas
-
-    -- addEventListener 
-
     state <- Ref.new defaultState
 
-    _ <- requestAnimationFrame (execFrame state canvas w) w
+    setKeyEvents state (toEventTarget w)
+
+    _ <- requestAnimationFrame (execFrame 0.0 state canvas w) w
 
     pure unit
 
 
-execFrame :: Ref GameState -> CanvasElement -> Window -> Effect Unit
-execFrame stateRef canvas w = do
+execFrame :: Number -> Ref GameState -> CanvasElement -> Window -> Effect Unit
+execFrame previousMillis stateRef canvas w = do
+    millis <- now
+
+    update ((millis - previousMillis) / 1000.0) stateRef
     draw stateRef canvas
-    _ <- requestAnimationFrame (execFrame stateRef canvas w) w
+    _ <- requestAnimationFrame (execFrame millis stateRef canvas w) w
     pure unit
 
 
@@ -66,6 +74,34 @@ draw stateRef canvas = do
     drawPlayer canvas stateRef
 
     pure unit
+
+update :: Number -> Ref GameState -> Effect Unit
+update dt stateRef = do
+    _ <- Ref.modify (updateGameState dt) stateRef
+    pure unit
+
+updateGameState :: Number -> GameState -> GameState
+updateGameState dt state = state {
+        -- tiles = updateTiles state.tiles,
+        -- ioSwitches = updateIOSwitches state.ioSwitches,
+        -- routingSwitches = updateRoutingSwitches state.routingSwitches,
+        player = updatePlayer dt state
+    }
+
+updatePlayer :: Number -> GameState -> Player
+updatePlayer dt state = state.player {
+        x = state.player.x + horizontal * dt * speed,
+        y = state.player.y + vertical * dt * speed
+    }
+    where
+        horizontal = 
+            if state.keyMap.left then (-1.0) else (
+                if state.keyMap.right then 1.0 else 0.0)
+        vertical = 
+            if state.keyMap.up then (-1.0) else (
+                if state.keyMap.down then 1.0 else 0.0)
+
+        speed = 400.0
 
 tilesize = 200.0
 
@@ -97,12 +133,38 @@ drawPlayer canvas stateRef = do
     ctx <- getContext2D canvas
     dims <- getCanvasDimensions canvas
 
-    setFillStyle ctx "#abc9ee"
-    setStrokeStyle ctx "#000000"
+    setFillStyle ctx "#2e82e8"
     fillPath ctx $ rect ctx
         { x: dims.width / 2.0
         , y: dims.height / 2.0
-        , width: 50.0
-        , height: 50.0
+        , width: 35.0
+        , height: 35.0
         }
-        
+
+
+keyHandler :: Boolean -> Ref GameState -> Event -> Effect Unit
+keyHandler b state event = unsafePartial do
+    let (Just keyEvent) = fromEvent event
+    _ <- Ref.modify (updateKeyMap $ code keyEvent) state
+    pure unit
+    where
+        updateKeyMap keyCode state = case keyCode of
+            "KeyW" -> state { keyMap {up = b} }
+            "KeyS" -> state { keyMap {down = b} }
+            "KeyA" -> state { keyMap {left = b} }
+            "KeyD" -> state { keyMap {right = b} }
+            _ -> state
+
+keyDownHandler :: Ref GameState -> Event -> Effect Unit
+keyDownHandler = keyHandler true
+
+keyUpHandler :: Ref GameState -> Event -> Effect Unit
+keyUpHandler = keyHandler false
+
+setKeyEvents :: Ref GameState -> EventTarget -> Effect Unit
+setKeyEvents state target = do
+    downListener <- eventListener (keyDownHandler state)
+    addEventListener (EventType "keydown") downListener false target
+
+    upListener <- eventListener (keyUpHandler state)
+    addEventListener (EventType "keyup") upListener false target

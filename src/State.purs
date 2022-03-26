@@ -16,7 +16,8 @@ type GameState = {
         tiles :: List Tile,
         ioSwitches :: List IOSwitch,
         routingSwitches :: List RoutingSwitch,
-        player :: Player
+        player :: Player,
+        keyMap :: KeyMap
     }
 
 
@@ -49,6 +50,14 @@ type Player = {
         y :: Number
     }
 
+-- Set by keydown and keyup events, keeps track of states of keys that are continuously pressed
+-- down by the player.
+type KeyMap = {
+        up :: Boolean,
+        left :: Boolean,
+        right :: Boolean,
+        down :: Boolean
+    }
 
 defaultState :: GameState
 defaultState = {
@@ -58,6 +67,12 @@ defaultState = {
         player: {
             x: 0.0,
             y: 0.0
+        },
+        keyMap: {
+            up: false,
+            left: false,
+            right: false,
+            down: false
         }
     }
 

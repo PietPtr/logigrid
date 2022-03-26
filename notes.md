@@ -24,3 +24,13 @@ Gamification: doe berekenjobs voor tokens, daarmee:
 ## Optie 2: ASIC-like.
 
 Grid waar je cells neerzet en kabels naartoe aanlegt. Je mag cells abstracten.
+
+# TODO's
+
+[x] dt propageren
+[ ] svg renderen
+    [ ] LUT rendering
+    [ ] io switch drawing
+    [ ] routing switch drawing
+[ ] acties
+[ ] lopen wat natuurlijker met wat kleine velocities enzo
