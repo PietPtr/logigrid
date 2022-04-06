@@ -3,7 +3,8 @@ module State where
 import Prelude
 
 import Data.List
-import Data.Vec
+import Data.Vec hiding (zip)
+import Data.List.Lazy (repeat)
 import Data.Typelevel.Num.Reps (D2, D4, D6, D8)
 import Data.Maybe (Maybe(..))
 import Data.Show
@@ -11,6 +12,7 @@ import Data.Tuple
 import Data.Boolean
 import Data.Generic.Rep
 import Data.Map as Map
+import Data.Map (Map)
 import Graphics.Canvas (CanvasImageSource)
 import Partial.Unsafe (unsafePartial)
 
@@ -19,34 +21,28 @@ type Coord = {
 }
 
 type GameState = {
-        tiles :: List Tile,
-        ioSwitches :: List IOSwitch,
-        routingSwitches :: List RoutingSwitch,
-        verticalTracks :: List VerticalTrack,
-        inputs :: List Input,
-        outputs :: List Output,
+        tiles :: Map Coord Tile,
+        ioSwitches :: Map Coord IOSwitch,
+        routingSwitches :: Map Coord RoutingSwitch,
+        verticalTracks :: Map Coord VerticalTrack,
+        inputs :: Map Coord Input,
+        outputs :: Map Coord Output,
         player :: Player,
         keyMap :: KeyMap,
-        imageMap :: Map.Map String CanvasImageSource,
+        imageMap :: Map String CanvasImageSource,
         dimensions :: { height :: Number, width :: Number }
     }
 
 type Input = {
-        x :: Int,
-        y :: Int,
         statea :: Boolean, -- set by a player action
         stateb :: Boolean
     }
 
 type Output = {
-        x :: Int,
-        y :: Int,
         state :: Boolean -- driven by some LUT output
     }
 
 type Tile = {
-        x :: Int,
-        y :: Int,
         arity :: Int,
         config :: TileConfiguration,
         netState :: TileNetState
@@ -67,13 +63,10 @@ type TileNetState = {
     }
 
 type VerticalTrack = {
-        x :: Int,
-        y :: Int
+        -- ooit iets van state nodig i guess?
     }
 
 type IOSwitch = {
-        x :: Int,
-        y :: Int,
         config :: Vec D6 Boolean, -- TODO: support different switch box topologies
         -- TODO: wirestate object
         -- at least can easily be used to render the activity of wires, how exactly it is going to be
@@ -91,8 +84,6 @@ type IOWireState = {
     }
 
 type RoutingSwitch = {
-        x :: Int,
-        y :: Int,
         config :: Vec D8 Boolean
         -- TODO: portstate object
     }
@@ -137,18 +128,16 @@ defaultState = {
     }
 
 
-tiles :: Int -> Int -> List Tile
-tiles nx ny = fromFoldable $ map makeTile coords
+tiles :: Int -> Int -> Map Coord Tile
+tiles nx ny = Map.fromFoldable $ zip coords (map makeTile coords)
     where
         coords = do
             x <- 0..(nx-1)
             y <- 0..(ny-1)
-            pure $ Tuple (x * 2) (y * 2)
+            pure { x: x * 2, y: y * 2 }
         
 
-        makeTile (Tuple x y) = {
-            x: x,
-            y: y,
+        makeTile _ = {
             arity: 2,
             config: {
                 lutConfig: false : true : true : true : Nil,
@@ -163,17 +152,15 @@ tiles nx ny = fromFoldable $ map makeTile coords
             }
         }
 
-ioSwitches :: Int -> Int -> List IOSwitch
-ioSwitches nx ny = fromFoldable $ map makeSwitch coords
+ioSwitches :: Int -> Int -> Map Coord IOSwitch
+ioSwitches nx ny = Map.fromFoldable $ zip coords (map makeSwitch coords)
     where
         coords = do
             x <- 0..(nx-1)
             y <- 1..(ny-1)
-            pure $ Tuple (x * 2) (y * 2 - 1)
+            pure { x: x * 2, y: y * 2 - 1 }
 
-        makeSwitch (Tuple x y) = {
-            x: x,
-            y: y,
+        makeSwitch _ = {
             config: false +> false +> false +> false +> false +> false +> empty,
             wireState: {
                 aWire: false,
@@ -185,54 +172,51 @@ ioSwitches nx ny = fromFoldable $ map makeSwitch coords
             }
         }
 
-verticalTracks :: Int -> Int -> List VerticalTrack
-verticalTracks nx ny = fromFoldable $ map makeTrack coords
+verticalTracks :: Int -> Int -> Map Coord VerticalTrack
+verticalTracks nx ny = Map.fromFoldable $ zip coords (map makeTrack coords)
     where
         coords = do
             x <- 1..(nx-1)
             y <- 0..(ny-1)
-            pure $ Tuple (x * 2 - 1) (y * 2)
+            pure $ { x: (x * 2 - 1), y: (y * 2) }
 
-        makeTrack (Tuple x y) = {
-            x: x, y: y
+        makeTrack _ = {
         }
 
-routingSwitches :: Int -> Int -> List RoutingSwitch
-routingSwitches nx ny = fromFoldable $ map makeSwitch coords
+routingSwitches :: Int -> Int -> Map Coord RoutingSwitch
+routingSwitches nx ny = Map.fromFoldable $ zip coords (map makeSwitch coords)
     where
         coords = do
             x <- 1..(nx-1)
             y <- 1..(ny-1)
-            pure $ Tuple (x * 2 - 1) (y * 2 - 1)
+            pure { x: x * 2 - 1, y: y * 2 - 1 }
 
-        makeSwitch (Tuple x y) = {
-            x: x,
-            y: y,
+        makeSwitch _ = {
             config: 
                 false +> false +> false +> false +> 
                 false +> false +> false +> false +> empty
         }
 
-inputs :: Int -> Int -> List Input
-inputs nx ny = fromFoldable $ map makeInput coords
+inputs :: Int -> Int -> Map Coord Input
+inputs nx ny = Map.fromFoldable $ zip coords (map makeInput coords)
     where
-        coords = (_ * 2) <$> (0..(nx - 1))
+        coords = do
+            x <- 0..(nx-1)
+            pure { x: x * 2, y: -1}
         
-        makeInput x = {
-            x: x,
-            y: (-1),
+        makeInput _ = {
             statea: false,
             stateb: true
         }
 
-outputs :: Int -> Int -> List Output
-outputs nx ny = fromFoldable $ map makeOutput coords
+outputs :: Int -> Int -> Map Coord Output
+outputs nx ny = Map.fromFoldable $ zip coords (map makeOutput coords)
     where
-        coords = (_ * 2) <$> (0..(nx - 1))
+        coords = do
+            x <- 0..(nx - 1)
+            pure { x: 2 * x, y: ny * 2 - 1 }
 
-        makeOutput x = {
-            x: x,
-            y: ny * 2 - 1,
+        makeOutput _ = {
             state: false
         }
 
@@ -253,21 +237,18 @@ interActions = (
     , f: switchPortA } :
     { gridType: GridInput -- port b driver
     , x: 0.835, y: 0.575
-    , f: (\_ s -> s) } :
+    , f: switchPortB } :
     Nil)
 
 
--- TODO: doe dit nou maar met maps sukkol het is echt grondig stuk op deze manier
-switchPortA :: {x :: Int, y :: Int } -> GameState -> GameState
--- switchPortA coords state = state { inputs { statea = not state.inputs.statea } }
-switchPortA coords state = state { inputs = inputs' }
+switchPortA = switchPort (\tile -> tile { statea = not tile.statea })
+switchPortB = switchPort (\tile -> tile { stateb = not tile.stateb })
+
+switchPort :: (Input -> Input) -> {x :: Int, y :: Int} -> GameState -> GameState
+switchPort f coords state =  state { inputs = inputs' }
     where
-        inputs' = updated : (filter equal state.inputs)
-
-        toUpdate = unsafePartial $ case filter (\s -> not $ equal s) state.inputs of
-            (elem : _) -> elem
-
-        updated = toUpdate { statea = not toUpdate.statea }
-
-        equal :: forall r . {x :: Int, y :: Int | r} -> Boolean
-        equal inp = inp.x == coords.x && inp.y == coords.y
+        inputs' = Map.insert coords (f tile) state.inputs
+        
+        tile = unsafePartial $ case Map.lookup coords state.inputs of
+            Just t -> t
+ 

@@ -153,14 +153,14 @@ updatePlayer dt state = state.player {
 
         speed = 337.5
 
-updateTiles :: GameState -> List Tile
-updateTiles state = map (updateTile state) state.tiles
+updateTiles :: GameState -> Map.Map Coord Tile
+updateTiles state = Map.fromFoldable $ map (updateTile state) (map2list state.tiles)
 
 b2i true = 1
 b2i false = 0
 
-updateTile :: GameState -> Tile -> Tile
-updateTile state tile = tile {
+updateTile :: GameState -> Tuple Coord Tile -> Tuple Coord Tile
+updateTile state (Tuple loc tile) = Tuple loc $ tile {
         netState {
             porta = porta',
             portb = portb',
@@ -183,16 +183,17 @@ updateTile state tile = tile {
         lutID = (b2i porta') * 2 + b2i portb'
 
         findDriverValues :: { statea :: Boolean, stateb :: Boolean }
-        findDriverValues = if tile.y == 0
+        findDriverValues = if loc.y == 0
             then searchInputs
             else searchIOSwitches
         
-        searchInputs = unsafePartial $ case filter (\inp -> inp.x == tile.x) state.inputs of
-            (input : Nil) -> { statea: input.statea, stateb: input.stateb }
+        searchInputs = unsafePartial $ case Map.lookup {x: loc.x, y: -1} state.inputs of 
+            Just inp -> inp
+            -- Nothing -> {statea: false, stateb: false}
 
-        searchIOSwitches = unsafePartial $ case filter (\sw -> sw.x == tile.x && sw.y == tile.y - 1) state.ioSwitches of
-            (switch : Nil) -> { statea: switch.wireState.aWire, stateb: switch.wireState.bWire }
-            (Nil) -> {statea: false, stateb: false}
+        searchIOSwitches = unsafePartial $ case Map.lookup loc state.ioSwitches of
+            Just switch -> { statea: switch.wireState.aWire, stateb: switch.wireState.bWire }
+            Nothing -> {statea: false, stateb: false}
 
 tilesize = 300.0
 
@@ -202,57 +203,60 @@ drawFromImageMap state ctx filename drawx drawy scale =
         Just source -> drawImageScale ctx source drawx drawy scale scale
         Nothing -> log ("Cannot find image " <> filename <> ".svg in resources folder.")
 
+map2list :: forall k v. Map.Map k v -> List (Tuple k v)
+map2list = Map.toUnfoldable
+
 drawTiles :: CanvasElement -> Ref GameState -> Effect Unit
 drawTiles canvas stateRef = do
     state <- Ref.read stateRef
     ctx <- getContext2D canvas
 
-    traverse_ (drawTile state ctx) state.tiles
-    traverse_ (drawTileActives state ctx) state.tiles
+    traverse_ (drawTile state ctx) (map2list state.tiles)
+    traverse_ (drawTileActives state ctx) (map2list state.tiles)
 
-    traverse_ (drawIOSwitch state ctx) state.ioSwitches
-    traverse_ (drawRouter state ctx) state.routingSwitches
-    traverse_ (drawTrack state ctx) state.verticalTracks
-    traverse_ (drawInput state ctx) state.inputs
-    traverse_ (drawOutput state ctx) state.outputs
+    traverse_ (drawIOSwitch state ctx) (Map.keys state.ioSwitches)
+    traverse_ (drawRouter state ctx) (Map.keys state.routingSwitches)
+    traverse_ (drawTrack state ctx) (Map.keys state.verticalTracks)
+    traverse_ (drawInput state ctx) (map2list state.inputs)
+    traverse_ (drawOutput state ctx) (map2list state.outputs)
 
     where
-        drawTile state ctx tile = do
-            drawSVGat "tile" tile state ctx
+        drawTile state ctx (Tuple loc tile) = do
+            drawSVGat "tile" loc state ctx
             
             -- drawFromImageMap state ctx "zero" drawx drawy tilesize
             traverse_ drawLutConfig (zip tile.config.lutConfig (0..3)) -- TODO: limits to 2LUTs.
 
             if tile.config.regmux
-                then drawSVGat "muxreg" tile state ctx
-                else drawSVGat "muxlut" tile state ctx
+                then drawSVGat "muxreg" loc state ctx
+                else drawSVGat "muxlut" loc state ctx
 
             -- tile.config.lutConfig
             where
                 value b = if b then "one" else "zero"
                 drawLutConfig (Tuple b n) = do
-                    let (Tuple drawx drawy) = tilePos state tile.x tile.y
+                    let (Tuple drawx drawy) = tilePos state loc.x loc.y
                     drawFromImageMap state ctx (value b) drawx (drawy + toNumber n * 0.126 * tilesize) tilesize
 
-        drawIOSwitch state ctx switch = drawSVGat "ioswitch" switch state ctx
-        drawRouter state ctx router = drawSVGat "router" router state ctx
-        drawTrack state ctx track = drawSVGat "track" track state ctx
-        drawInput state ctx input = do
-            drawSVGat "input" input state ctx
+        drawIOSwitch state ctx switchLoc = drawSVGat "ioswitch" switchLoc state ctx
+        drawRouter state ctx routerLoc = drawSVGat "router" routerLoc state ctx
+        drawTrack state ctx trackLoc = drawSVGat "track" trackLoc state ctx
+        drawInput state ctx (Tuple loc input) = do
+            drawSVGat "input" loc state ctx
             if input.statea
-                then drawSVGat "input_a" input state ctx
+                then drawSVGat "input_a" loc state ctx
                 else pure unit
             if input.stateb
-                then drawSVGat "input_b" input state ctx
+                then drawSVGat "input_b" loc state ctx
                 else pure unit
 
             -- if input.stateb
             --     then drawSVGat "input_b" input state ctx
-        drawOutput state ctx output = drawSVGat "output" output state ctx
+        drawOutput state ctx (Tuple loc output) = drawSVGat "output" loc state ctx
 
         drawSVGat :: forall r . String -> { x :: Int, y :: Int | r } -> GameState -> Context2D -> Effect Unit
-        drawSVGat filename geval state ctx = do
-            let (Tuple drawx drawy) = tilePos state geval.x geval.y
+        drawSVGat filename loc state ctx = do
+            let (Tuple drawx drawy) = tilePos state loc.x loc.y
 
             setFillStyle ctx "#ffffff00"
             setStrokeStyle ctx "#cccccc"
@@ -266,8 +270,8 @@ drawTiles canvas stateRef = do
             drawFromImageMap state ctx filename drawx drawy tilesize
 
 
-        drawTileActives :: GameState -> Context2D -> Tile -> Effect Unit
-        drawTileActives state ctx tile = do
+        drawTileActives :: GameState -> Context2D -> Tuple Coord Tile -> Effect Unit
+        drawTileActives state ctx (Tuple loc tile) = do
             ifDraw tile.netState.porta "porta"
             ifDraw tile.netState.portb "portb"
             ifDraw tile.netState.lutOut "lutOut"
@@ -275,7 +279,7 @@ drawTiles canvas stateRef = do
             ifDraw tile.netState.muxOut "muxOut"
                 where
                     ifDraw isActive name = do
-                        let (Tuple drawx drawy) = tilePos state tile.x tile.y
+                        let (Tuple drawx drawy) = tilePos state loc.x loc.y
                         if isActive then
                             case Map.lookup ("resources/tile/"<> name <> ".svg") state.imageMap of
                                 Just source -> drawImageScale ctx source drawx drawy tilesize tilesize
@@ -352,7 +356,7 @@ applyInteractable stateRef = do
     pure unit
     where
         findAndApply :: GameState -> GameState
-        findAndApply state = spy (show coords) $ stateFunc state
+        findAndApply state = stateFunc state
             where
                 playerx' = state.player.x + state.dimensions.width / 2.0
                 playery' = state.player.y + state.dimensions.height / 2.0
@@ -365,16 +369,17 @@ applyInteractable stateRef = do
                 }
 
                 -- find what type it is
-                tileType = unsafePartial $ case filter equalCoords state.inputs of
-                    (inp : _ ) -> GridInput
-                    Nil -> case filter equalCoords state.tiles of
-                        (tile : _ ) -> GridTile
-                        Nil -> case filter equalCoords state.outputs of
-                            (out : _ ) -> GridOutput
-                            Nil -> case filter equalCoords state.ioSwitches of
-                                (ioSwitch : _) -> GridIOSwitch
-                                Nil -> case filter equalCoords state.routingSwitches of
-                                    (router : _) -> GridRouter
+                tileType = unsafePartial $ case Map.lookup coords state.inputs of
+                    (Just _) -> GridInput
+                    Nothing -> case Map.lookup coords state.tiles of
+                        (Just _) -> GridTile
+                        Nothing -> case Map.lookup coords state.outputs of
+                            (Just _) -> GridOutput
+                            Nothing -> case Map.lookup coords state.ioSwitches of
+                                (Just _) -> GridIOSwitch
+                                Nothing -> case Map.lookup coords state.routingSwitches of
+                                    (Just _) -> GridRouter
+
 
                 equalCoords :: forall r . { x :: Int, y :: Int | r } -> Boolean
                 equalCoords e = e.x == coords.x && e.y == coords.y
