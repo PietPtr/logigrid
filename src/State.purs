@@ -11,6 +11,7 @@ import Data.Show
 import Data.Tuple
 import Data.Boolean
 import Data.Generic.Rep
+import Data.Ord
 import Data.Map as Map
 import Data.Map (Map)
 import Graphics.Canvas (CanvasImageSource)
@@ -50,7 +51,7 @@ type Tile = {
 
 
 type TileConfiguration = {
-        lutConfig :: List Boolean,
+        lutConfig :: Map Int Boolean,
         regmux :: Boolean
     }
 
@@ -140,7 +141,7 @@ tiles nx ny = Map.fromFoldable $ zip coords (map makeTile coords)
         makeTile _ = {
             arity: 2,
             config: {
-                lutConfig: false : true : true : true : Nil,
+                lutConfig: Map.fromFoldable (Tuple 0 false : Tuple 1 false : Tuple 2 false : Tuple 3 false : Nil),
                 regmux: false
             },
             netState: {
@@ -238,17 +239,49 @@ interActions = (
     { gridType: GridInput -- port b driver
     , x: 0.835, y: 0.575
     , f: switchPortB } :
+    { gridType: GridTile
+    , x: 0.632, y: 0.789
+    , f: switchMux } :
+    { gridType: GridTile
+    , x: 0.310, y: 0.110
+    , f: switchLUT00 } :
+    { gridType: GridTile
+    , x: 0.310, y: 0.260
+    , f: switchLUT01 } :
+    { gridType: GridTile
+    , x: 0.310, y: 0.371
+    , f: switchLUT10 } :
+    { gridType: GridTile
+    , x: 0.310, y: 0.502
+    , f: switchLUT11 } :
     Nil)
 
 
-switchPortA = switchPort (\tile -> tile { statea = not tile.statea })
-switchPortB = switchPort (\tile -> tile { stateb = not tile.stateb })
+switchPortA = switchInInput (\tile -> tile { statea = not tile.statea })
+switchPortB = switchInInput (\tile -> tile { stateb = not tile.stateb })
 
-switchPort :: (Input -> Input) -> {x :: Int, y :: Int} -> GameState -> GameState
-switchPort f coords state =  state { inputs = inputs' }
+switchInInput :: (Input -> Input) -> {x :: Int, y :: Int} -> GameState -> GameState
+switchInInput f coords state = state { inputs = inputs' }
     where
         inputs' = Map.insert coords (f tile) state.inputs
-        
-        tile = unsafePartial $ case Map.lookup coords state.inputs of
-            Just t -> t
+        tile = findInMap coords state.inputs
  
+switchMux = switchInTile (\tile -> tile { config { regmux = not tile.config.regmux }})
+switchLUT00 = switchLUTXX 0
+switchLUT01 = switchLUTXX 1
+switchLUT10 = switchLUTXX 2
+switchLUT11 = switchLUTXX 3
+
+switchLUTXX x = switchInTile (\tile -> 
+    tile { config { lutConfig = Map.update (\v -> Just $ not v) x tile.config.lutConfig }})
+
+
+switchInTile :: (Tile -> Tile) -> {x :: Int, y :: Int } -> GameState -> GameState
+switchInTile f coords state = state { tiles = tiles' }
+    where
+        tiles' = Map.insert coords (f tile) state.tiles
+        tile = findInMap coords state.tiles
+
+findInMap :: forall k v . Ord k => k -> Map k v -> v
+findInMap coords map = unsafePartial $ case Map.lookup coords map of
+    Just t -> t

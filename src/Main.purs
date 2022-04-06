@@ -106,8 +106,7 @@ execFrame previousMillis stateRef canvas w = do
 
     state <- Ref.read stateRef
     dims <- getCanvasDimensions canvas
-    -- log (show $ Tuple (state.player.x + dims.width / 2.0) (state.player.y + dims.height / 2.0))
-
+    
     update ((millis - previousMillis) / 1000.0) stateRef
     draw stateRef canvas
     _ <- requestAnimationFrame (execFrame millis stateRef canvas w) w
@@ -172,7 +171,7 @@ updateTile state (Tuple loc tile) = Tuple loc $ tile {
     where
         porta' = findDriverValues.statea
         portb' = findDriverValues.stateb
-        lutOut' = unsafePartial $ case tile.config.lutConfig !! lutID of
+        lutOut' = unsafePartial $ case Map.lookup lutID tile.config.lutConfig of
             Just value -> value
         -- TODO: if rising edge, copy value at input
         regOut' = tile.netState.regOut
@@ -225,7 +224,7 @@ drawTiles canvas stateRef = do
             drawSVGat "tile" loc state ctx
             
             -- drawFromImageMap state ctx "zero" drawx drawy tilesize
-            traverse_ drawLutConfig (zip tile.config.lutConfig (0..3)) -- TODO: limits to 2LUTs.
+            traverse_ drawLutConfig (map2list tile.config.lutConfig)
 
             if tile.config.regmux
                 then drawSVGat "muxreg" loc state ctx
@@ -234,9 +233,9 @@ drawTiles canvas stateRef = do
             -- tile.config.lutConfig
             where
                 value b = if b then "one" else "zero"
-                drawLutConfig (Tuple b n) = do
+                drawLutConfig (Tuple key val) = do
                     let (Tuple drawx drawy) = tilePos state loc.x loc.y
-                    drawFromImageMap state ctx (value b) drawx (drawy + toNumber n * 0.126 * tilesize) tilesize
+                    drawFromImageMap state ctx (value val) drawx (drawy + toNumber key * 0.126 * tilesize) tilesize
 
         drawIOSwitch state ctx switchLoc = drawSVGat "ioswitch" switchLoc state ctx
         drawRouter state ctx routerLoc = drawSVGat "router" routerLoc state ctx
@@ -335,6 +334,7 @@ keyPressHandler stateRef event = unsafePartial do
 
     case code keyEvent of
         "KeyE" -> applyInteractable stateRef
+        "Space" -> applyInteractable stateRef
         _ -> pure unit
 
 setKeyEvents :: Ref GameState -> EventTarget -> Effect Unit
@@ -392,18 +392,19 @@ applyInteractable stateRef = do
                 stateFunc = case minimumBy (\(Tuple a _) (Tuple b _) -> compare a b) 
                         (zip (map distanceFromPlayer interactables) interactables) of
                     -- apply its function to the gamestate to the tile we're in.
-                    Just (Tuple dist ia) -> if dist < 0.2
+                    Just (Tuple dist ia) -> if (dist < 0.05)
                         then (ia.f coords)
                         else id
                     Nothing -> id
 
-                relativePlayerPos = {
+                relativePlayerPos = spy "pos" {
                     x: decPart $ playerx' / tilesize,
                     y: decPart $ playery' / tilesize
                 }
-                distanceFromPlayer ia = (ia.x - relativePlayerPos.x) `pow` 2.0 + (ia.y - relativePlayerPos.y) `pow` 2.0
+                distanceFromPlayer ia = 
+                    (ia.x - relativePlayerPos.x) `pow` 2.0 + (ia.y - relativePlayerPos.y) `pow` 2.0
 
-        
+
 
 decPart :: Number -> Number
 decPart x = x - (toNumber $ floor x)
